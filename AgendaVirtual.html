@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agenda 3D Fotorrealista - Edición Precisión</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,700;1,500&family=Inter:wght@300;400;500;600&family=Caveat:wght@600;700&family=Special+Elite&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --wood: #110a05; --leather: #2a1610; --paper: #f7efe1;
+            --paper-dark: #e8dcc4; --gold: #c5a059; --gold-light: #e6c587;
+            --text-main: #2b231d; --text-muted: #6b5a4e; 
+            --danger: #d9534f; --success: #43a047;
+            --folio-bg: #fcfbf9; --folio-lines: #e5eef7;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--wood) url('https://www.transparenttextures.com/patterns/wood-pattern.png');
+            height: 100vh; display: flex; justify-content: center; align-items: center;
+            overflow: hidden; font-family: 'Inter', sans-serif; color: var(--text-main);
+        }
+
+        /* --- SISTEMA DE ZOOM Y PANTALLA COMPLETA --- */
+        #zoom-container {
+            display: flex; align-items: center; justify-content: center;
+            gap: 50px; transition: transform 0.2s ease-out;
+            transform-origin: center;
+        }
+
+        .floating-controls {
+            position: fixed; bottom: 30px; right: 30px;
+            display: flex; gap: 12px; z-index: 9999;
+            background: rgba(26, 13, 8, 0.85); padding: 10px;
+            border-radius: 30px; box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+            border: 1px solid rgba(197, 160, 89, 0.3);
+            backdrop-filter: blur(5px);
+        }
+
+        .ctrl-btn {
+            background: transparent; color: var(--gold-light);
+            border: 2px solid var(--gold-light); border-radius: 50%;
+            width: 44px; height: 44px; font-size: 22px; font-weight: bold;
+            cursor: pointer; display: flex; justify-content: center; align-items: center;
+            transition: all 0.2s;
+        }
+        .ctrl-btn:hover {
+            background: var(--gold); color: #111;
+            transform: scale(1.1); box-shadow: 0 0 15px rgba(197, 160, 89, 0.5);
+        }
+
+        /* --- AGENDA 3D FOTORREALISTA --- */
+        .agenda {
+            width: 1350px; height: 880px; background: var(--leather);
+            border-radius: 14px 45px 45px 14px; position: relative;
+            display: flex; padding: 16px;
+            box-shadow: 
+                35px 45px 65px rgba(0,0,0,0.85), 
+                inset 0 0 90px rgba(0,0,0,0.7),
+                inset 6px 0 12px rgba(255,255,255,0.08);
+            transform: perspective(2800px) rotateX(4deg) rotateY(-1deg);
+            background-image: url('https://www.transparenttextures.com/patterns/purty-wood.png');
+        }
+
+        .spine {
+            position: absolute; left: 50%; top: 0; bottom: 0; width: 64px;
+            transform: translateX(-50%); z-index: 10;
+            background: linear-gradient(to right, #0a0503, #3a2318, #523525, #3a2318, #0a0503);
+            box-shadow: 0 0 45px rgba(0,0,0,0.9), inset 0 0 15px rgba(0,0,0,0.6);
+            border-left: 1px solid rgba(255,255,255,0.03); border-right: 1px solid rgba(255,255,255,0.03);
+        }
+
+        .page {
+            flex: 1; height: 100%; background: var(--paper);
+            background-image: url('https://www.transparenttextures.com/patterns/paper-fibers.png');
+            position: relative; overflow-y: auto; padding: 55px;
+        }
+
+        .left-page { 
+            border-radius: 10px 0 0 10px; 
+            box-shadow: inset -30px 0 35px -12px rgba(0,0,0,0.22), 2px 0 6px rgba(0,0,0,0.15);
+            border-right: 1px solid #d3c6ae;
+        }
+        .right-page { 
+            border-radius: 0 10px 10px 0; 
+            box-shadow: inset 30px 0 35px -12px rgba(0,0,0,0.22), -2px 0 6px rgba(0,0,0,0.15);
+            border-left: 1px solid #d3c6ae;
+        }
+
+        /* --- CATEGORÍAS (MARCAPÁGINAS) --- */
+        .tabs {
+            position: absolute; left: -72px; top: 60px;
+            display: flex; flex-direction: column; gap: 18px; z-index: 5;
+        }
+
+        .tab {
+            width: 72px; height: 64px; background: #3e261a;
+            color: var(--gold-light); border: none; border-radius: 16px 0 0 16px;
+            cursor: pointer; font-size: 26px; display: flex;
+            align-items: center; justify-content: center; 
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            box-shadow: -6px 6px 18px rgba(0,0,0,0.6), inset 2px 2px 6px rgba(255,255,255,0.08);
+            border-right: 4px solid var(--gold);
+        }
+
+        .tab:hover { background: #523525; transform: translateX(-6px); }
+        .tab.active {
+            width: 92px; background: var(--gold); color: #fff;
+            transform: translateX(-20px); border-right: none;
+            box-shadow: -10px 10px 25px rgba(0,0,0,0.6), inset 2px 2px 6px rgba(255,255,255,0.4);
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+        }
+
+        /* --- POSITS EXTERNOS --- */
+        .posit-stack { display: flex; flex-direction: column; gap: 35px; width: 260px; }
+        .posit {
+            padding: 28px; font-family: 'Caveat', cursive; font-size: 24px;
+            box-shadow: 8px 12px 25px rgba(0,0,0,0.45), inset -2px -2px 12px rgba(0,0,0,0.06); 
+            min-height: 160px; position: relative; color: #1a1a1a; line-height: 1.2;
+        }
+        .posit::after {
+            content: ''; position: absolute; bottom: 0; right: 0;
+            border-width: 0 0 30px 30px; border-style: solid;
+            border-color: transparent transparent rgba(0,0,0,0.12) transparent;
+        }
+        .p-clock { background: linear-gradient(135deg, #fffbc4, #fdfd96); transform: rotate(2.5deg); border-radius: 2px 2px 30px 2px; }
+        .p-pomo { background: linear-gradient(135deg, #cde3ec, #aec6cf); transform: rotate(-2deg); border-radius: 2px 30px 2px 2px; }
+        .p-urgent { background: linear-gradient(135deg, #ffe1e6, #ffb7c5); transform: rotate(1.5deg); border-radius: 30px 2px 2px 2px; }
+
+        /* --- UI ELEMENTS --- */
+        h2 { font-family: 'Lora', serif; font-size: 38px; border-bottom: 3px double var(--gold); padding-bottom: 12px; margin-bottom: 28px; color: var(--text-main); text-shadow: 1px 1px 0px rgba(255,255,255,0.6); }
+        h3 { font-family: 'Lora', serif; margin-bottom: 10px; color: #422d1f; }
+        
+        .btn-main { 
+            background: linear-gradient(to bottom, var(--gold-light), var(--gold)); 
+            color: white; border: none; padding: 12px 26px; border-radius: 6px; 
+            cursor: pointer; font-weight: 600; font-size: 14px; letter-spacing: 0.5px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15); transition: all 0.2s; text-shadow: 1px 1px 2px rgba(0,0,0,0.25);
+        }
+        .btn-main:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.2); filter: brightness(1.05); }
+        .btn-main:active { transform: translateY(1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+        input, select { 
+            border: 1px solid #c8bba3; border-radius: 6px; padding: 12px; 
+            font-family: 'Inter', sans-serif; background: rgba(255,255,255,0.6); 
+            transition: 0.3s; font-size: 14px;
+        }
+        input:focus, select:focus { outline: none; border-color: var(--gold); background: #fff; box-shadow: 0 0 8px rgba(197, 160, 89, 0.4); }
+        input[type="color"] { cursor: pointer; padding: 2px; background: #fff; }
+
+        /* --- FOLIO APUNTES PRO --- */
+        .folio-wrapper {
+            background: var(--folio-bg); min-height: 580px;
+            border-radius: 6px; box-shadow: 0 12px 35px rgba(0,0,0,0.12);
+            position: relative; overflow: hidden; border: 1px solid #e8e2d5;
+        }
+        .folio-toolbar {
+            display: flex; gap: 8px; background: #f4f1ea; padding: 14px 18px;
+            border-bottom: 1px solid #e0d8c9; flex-wrap: wrap; align-items: center;
+        }
+        .tool-btn {
+            padding: 8px 14px; cursor: pointer; background: #fff; color: #333;
+            border: 1px solid #d3cbbb; border-radius: 4px; font-weight: 500; font-size: 13px; transition: 0.2s;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .tool-btn:hover { background: #fdfdfc; border-color: var(--gold); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        
+        .color-picker-tool { width: 26px; height: 26px; border: none; padding: 0; border-radius: 4px; cursor: pointer; }
+
+        .folio-editor {
+            padding: 45px 45px 45px 75px; min-height: 500px; outline: none;
+            background-image: repeating-linear-gradient(transparent, transparent 31px, var(--folio-lines) 32px);
+            line-height: 32px; font-size: 16px; color: #2c2c2c; position: relative;
+        }
+        .folio-editor::before {
+            content: ''; position: absolute; top: 0; bottom: 0; left: 55px;
+            width: 2px; background: rgba(217, 83, 79, 0.4);
+        }
+
+        /* --- POMODORO VOLUME SLIDER --- */
+        .vol-slider {
+            -webkit-appearance: none; width: 100%; height: 14px;
+            background: rgba(0,0,0,0.08); border-radius: 12px; outline: none; margin: 18px 0 28px;
+            box-shadow: inset 0 3px 6px rgba(0,0,0,0.1);
+        }
+        .vol-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 34px; height: 34px;
+            background: var(--gold); border-radius: 50%; cursor: pointer;
+            border: 4px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .vol-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+        /* --- CALENDARIO SEMANAL GIGANTE --- */
+        .cal-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 6px 20px rgba(0,0,0,0.06); }
+        .cal-grid { display: grid; grid-template-columns: 75px repeat(7, 1fr); border: 1px solid #e0e0e0; }
+        .cal-header { background: #3a2318; color: #fff; padding: 14px 5px; font-size: 13px; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;}
+        .cal-hour-label { background: #fdfbf7; border-bottom: 1px solid #efefef; border-right: 1px solid #e0e0e0; text-align: center; padding: 16px 0; font-size: 12px; font-weight: 600; color: #888; }
+        .cal-cell { border-bottom: 1px solid #efefef; border-right: 1px solid #efefef; min-height: 52px; padding: 4px; position: relative; transition: background 0.2s; }
+        .cal-cell:hover { background: rgba(197, 160, 89, 0.08); }
+        .cal-task-item { font-size: 12px; padding: 5px 8px; margin-bottom: 4px; border-radius: 5px; color: white; cursor: pointer; display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; box-shadow: 0 2px 5px rgba(0,0,0,0.15); font-weight: 500;}
+        .cal-task-item:hover { filter: brightness(0.85); text-decoration: line-through; }
+
+        /* --- TARJETAS --- */
+        .card { 
+            background: rgba(255,255,255,0.85); padding: 18px; border-radius: 10px; 
+            margin-bottom: 16px; box-shadow: 0 5px 15px rgba(0,0,0,0.04); 
+            border: 1px solid rgba(0,0,0,0.06); transition: transform 0.25s, box-shadow 0.25s;
+        }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); background: #fff; }
+        
+        .urgency-btn { background: var(--danger); color: white; border: none; padding: 5px 12px; border-radius: 5px; font-size: 11px; cursor: pointer; font-weight: bold; text-transform: uppercase; }
+        .urgency-btn.inactive { background: #bdc3c7; color: #fff; }
+
+        .exam-bar-bg { background: #e9e9e9; height: 22px; border-radius: 11px; overflow: hidden; display: flex; margin: 14px 0 10px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1); }
+        .bar-green { background: linear-gradient(90deg, #43a047, #2ecc71); height: 100%; transition: width 0.6s ease-out; }
+        .bar-red { background: linear-gradient(90deg, #d9534f, #e74c3c); height: 100%; flex-grow: 1; }
+
+        /* --- MODALES --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.65); backdrop-filter: blur(6px); z-index: 2000; 
+            display: none; justify-content: center; align-items: center;
+        }
+        .modal-box { 
+            background: var(--paper); padding: 45px; border-radius: 14px; 
+            text-align: center; max-width: 420px; box-shadow: 0 30px 60px rgba(0,0,0,0.4);
+            border: 1px solid var(--gold); background-image: url('https://www.transparenttextures.com/patterns/paper-fibers.png');
+        }
+
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.04); border-radius: 5px; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.25); border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+        ::-webkit-scrollbar-thumb:hover { background-color: rgba(0,0,0,0.4); }
+    </style>
+</head>
+<body>
+
+<div class="floating-controls">
+    <button class="ctrl-btn" onclick="zoomOut()" title="Alejar Zoom">-</button>
+    <button class="ctrl-btn" onclick="zoomIn()" title="Acercar Zoom">+</button>
+    <div style="width: 2px; background: rgba(197, 160, 89, 0.4); margin: 0 5px;"></div>
+    <button class="ctrl-btn" onclick="toggleFullScreen()" title="Pantalla Completa">⛶</button>
+</div>
+
+<div id="zoom-container">
+    <div class="agenda">
+        <div class="spine"></div>
+        <div class="tabs">
+            <button class="tab active" onclick="nav('mats')" title="Materias">📚</button>
+            <button class="tab" onclick="nav('pomo')" title="Pomodoro">⏱️</button>
+            <button class="tab" onclick="nav('stats')" title="Progresión">📊</button>
+            <button class="tab" onclick="nav('cal')" title="Calendario">📅</button>
+            <button class="tab" onclick="nav('tasks')" title="Tareas">📝</button>
+            <button class="tab" onclick="nav('trophy')" title="Logros">🏆</button>
+            <button class="tab" onclick="nav('exams')" title="Exámenes">🎓</button>
+        </div>
+        <div class="page left-page" id="view-left"></div>
+        <div class="page right-page" id="view-right"></div>
+    </div>
+
+    <div class="posit-stack">
+        <div class="posit p-clock">
+            <strong style="font-family:'Inter', sans-serif; font-size:14px; color:#666; letter-spacing:1px;">HORA ACTUAL</strong>
+            <div id="live-clock" style="font-size: 40px; margin-top:8px;">00:00:00</div>
+        </div>
+        <div class="posit p-pomo">
+            <strong style="font-family:'Inter', sans-serif; font-size:14px; color:#666; letter-spacing:1px;">POMODORO</strong>
+            <div id="pomo-posit-status" style="font-size: 26px; margin-top:8px; color:#222;">En espera</div>
+            <div id="pomo-posit-time" style="font-size: 46px; font-weight: bold; color:var(--danger);">--:--</div>
+        </div>
+        <div class="posit p-urgent">
+            <strong style="font-family:'Inter', sans-serif; font-size:14px; color:#666; letter-spacing:1px;">URGENTE 🚩</strong>
+            <div id="urgent-list-posit" style="font-size: 22px; margin-top:8px; line-height:1.4;">Nada pendiente. ¡Genial!</div>
+        </div>
+    </div>
+</div>
+
+<div id="modal" class="modal-overlay">
+    <div class="modal-box">
+        <h3 id="modal-text" style="font-size:24px; margin-bottom:30px;">¿Estás seguro?</h3>
+        <div style="display:flex; gap:15px; justify-content:center;">
+            <button class="btn-main" id="btn-confirm" style="background:var(--success);">Sí, confirmar</button>
+            <button class="btn-main" style="background:#7f8c8d;" onclick="closeModal()">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    /* --- SISTEMA DE ZOOM Y PANTALLA COMPLETA --- */
+    let currentScale = 1;
+
+    function initZoom() {
+        currentScale = Math.min(window.innerWidth / 1750, window.innerHeight / 1000);
+        applyZoom();
+    }
+
+    function applyZoom() {
+        document.getElementById('zoom-container').style.transform = `scale(${currentScale})`;
+    }
+
+    function zoomIn() { currentScale += 0.05; applyZoom(); }
+    function zoomOut() { currentScale = Math.max(0.3, currentScale - 0.05); applyZoom(); }
+
+    function toggleFullScreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => { alert(`Error: ${err.message}`); });
+        } else {
+            if (document.exitFullscreen) document.exitFullscreen();
+        }
+    }
+
+    /* --- HELPERS Y MOTOR DE DATOS --- */
+    let db = JSON.parse(localStorage.getItem('agenda_master')) || {
+        mats: [], stats: {}, tasks: { daily: [], weekly: [] }, 
+        cal: [], logros: [], exams: [], settings: { pomoStudy: 25, pomoBreak: 5 }
+    };
+
+    let curTab = 'mats', curMatIdx = -1, curSubIdx = -1; 
+    
+    // VARIABLES DEL POMODORO DE ALTA PRECISIÓN
+    let timerObj = null;
+    let timerSecs = 0;          // Segundos restantes guardados (para pausas)
+    let expectedEndTime = 0;    // Momento exacto en el futuro en que debe acabar (Date.now() + ms)
+    let isStudySession = true;
+
+    function save() { localStorage.setItem('agenda_master', JSON.stringify(db)); updatePosits(); }
+
+    function formatTime(totalMins) {
+        if (!totalMins || isNaN(totalMins) || totalMins <= 0) return "0m";
+        totalMins = Math.round(totalMins);
+        const h = Math.floor(totalMins / 60);
+        const m = totalMins % 60;
+        if (h > 0 && m > 0) return `${h}h ${m}m`;
+        if (h > 0) return `${h}h`;
+        return `${m}m`;
+    }
+
+    function nav(tab) {
+        curTab = tab;
+        document.querySelectorAll('.tab').forEach((t, i) => {
+            const keys = ['mats','pomo','stats','cal','tasks','trophy','exams'];
+            t.classList.toggle('active', keys[i] === tab);
+        });
+        render();
+    }
+
+    function render() {
+        const l = document.getElementById('view-left');
+        const r = document.getElementById('view-right');
+        l.innerHTML = ''; r.innerHTML = '';
+
+        if(curTab === 'mats') renderMats(l, r);
+        if(curTab === 'pomo') renderPomo(l, r);
+        if(curTab === 'stats') renderStats(l, r);
+        if(curTab === 'cal') renderCal(l, r);
+        if(curTab === 'tasks') renderTasks(l, r);
+        if(curTab === 'trophy') renderTrophy(l, r);
+        if(curTab === 'exams') renderExams(l, r);
+        save();
+    }
+
+    /* ================= 1. MATERIAS ================= */
+    function renderMats(l, r) {
+        l.innerHTML = `<h2>Mis Materias</h2>
+            <div class="card" style="display:flex; gap:12px; margin-bottom:25px; padding:12px;">
+                <input type="text" id="in-mat-name" placeholder="Nombre de la materia..." style="flex:1;">
+                <input type="color" id="in-mat-col" value="#c5a059" style="width:55px; height:46px; border:1px solid #ccc; border-radius:6px; cursor:pointer; padding:2px;">
+                <button class="btn-main" onclick="addMat()">Crear</button>
+            </div>
+            <div id="m-list"></div>`;
+        
+        db.mats.forEach((m, i) => {
+            l.querySelector('#m-list').innerHTML += `
+                <div class="card" style="border-left:8px solid ${m.col}; cursor:pointer; display:flex; align-items:center;" onclick="openMat(${i})">
+                    <strong style="flex:1; font-size:17px; color:#222;">${m.name}</strong>
+                    <button style="border:none; background:none; font-size:20px; color:var(--danger); cursor:pointer;" onclick="event.stopPropagation(); confirmDelMat(${i})" title="Eliminar materia">🗑️</button>
+                </div>`;
+        });
+
+        if(curMatIdx !== -1) {
+            const m = db.mats[curMatIdx];
+            const page = curSubIdx === -1 ? m : m.subs[curSubIdx];
+            
+            r.innerHTML = `
+                <div class="folio-wrapper">
+                    <div class="folio-toolbar">
+                        <button class="tool-btn" onclick="exec('undo')" title="Deshacer">⟲</button>
+                        <button class="tool-btn" onclick="exec('redo')" title="Rehacer">⟳</button>
+                        <div style="width:1px; height:20px; background:#ccc; margin:0 5px;"></div>
+                        <button class="tool-btn" onclick="exec('bold')" style="font-weight:bold;">B</button>
+                        <button class="tool-btn" onclick="exec('italic')" style="font-style:italic;">I</button>
+                        <button class="tool-btn" onclick="exec('underline')" style="text-decoration:underline;">U</button>
+                        
+                        <div style="width:1px; height:20px; background:#ccc; margin:0 5px;"></div>
+                        <div style="display:flex; align-items:center; gap:5px; margin-right:10px;">
+                            <span style="font-size:14px; font-weight:bold; color:#444;">Letra:</span>
+                            <input type="color" onchange="exec('foreColor', this.value)" value="#000000" class="color-picker-tool" title="Color de texto">
+                        </div>
+                        <div style="display:flex; align-items:center; gap:5px;">
+                            <span style="font-size:14px; font-weight:bold; color:#444;">Fondo:</span>
+                            <input type="color" onchange="exec('hiliteColor', this.value)" value="#f1c40f" class="color-picker-tool" title="Color de resaltado">
+                        </div>
+
+                        <div style="width:1px; height:20px; background:#ccc; margin:0 5px;"></div>
+                        <button class="tool-btn" onclick="exec('formatBlock','H2')">T1</button>
+                        <button class="tool-btn" onclick="exec('formatBlock','H4')">T2</button>
+                        
+                        <button class="btn-main" onclick="exportPDF()" style="margin-left:auto; padding:6px 12px; font-size:12px;">📥 PDF</button>
+                    </div>
+                    
+                    <div style="padding:12px 25px; background:#fff; border-bottom:1px solid #e0d8c9; display:flex; align-items:center; gap:15px;">
+                        <input type="text" value="${page.name}" onchange="renamePage(this.value)" style="flex:1; font-family:'Lora', serif; font-size:22px; font-weight:bold; color:#3a2318; border:none; background:transparent; padding:5px;">
+                        <button class="tool-btn" style="background:var(--success); color:white; border:none;" onclick="addSub()">+ Subpágina</button>
+                    </div>
+                    
+                    <div class="folio-editor" id="folio-editor" contenteditable="true" oninput="saveFolio()">${page.content || ''}</div>
+                </div>
+                
+                <div style="margin-top:20px; display:flex; gap:10px; flex-wrap:wrap;">
+                    <button class="tool-btn" style="${curSubIdx === -1 ? 'border-color:var(--gold); background:#fffef5; font-weight:bold;' : ''}" onclick="switchSub(-1)">Principal</button>
+                    ${m.subs.map((s, si) => `
+                        <button class="tool-btn" style="${curSubIdx === si ? 'border-color:var(--gold); background:#fffef5; font-weight:bold;' : ''}" onclick="switchSub(${si})">
+                            ${s.name} <span style="color:var(--danger); margin-left:8px; padding:0 3px; font-weight:bold;" onclick="event.stopPropagation(); delSub(${si})">×</span>
+                        </button>
+                    `).join('')}
+                </div>`;
+        }
+    }
+
+    function addMat() { const n = document.getElementById('in-mat-name').value; const c = document.getElementById('in-mat-col').value; if(n) { db.mats.push({name:n, col:c, content: '', subs: []}); render(); } }
+    function confirmDelMat(i) { showModal(`¿Eliminar definitivamente "${db.mats[i].name}" y sus apuntes?`, () => { db.mats.splice(i, 1); curMatIdx = -1; render(); }); }
+    function openMat(i) { curMatIdx = i; curSubIdx = -1; render(); }
+    function switchSub(si) { curSubIdx = si; render(); }
+    function addSub() { const n = prompt("Nombre de la subpágina:"); if(n) { db.mats[curMatIdx].subs.push({name:n, content:''}); curSubIdx = db.mats[curMatIdx].subs.length - 1; render(); } }
+    function delSub(si) { showModal("¿Eliminar esta subpágina?", () => { db.mats[curMatIdx].subs.splice(si, 1); curSubIdx = -1; render(); }); }
+    function renamePage(val) { if(curSubIdx === -1) db.mats[curMatIdx].name = val; else db.mats[curMatIdx].subs[curSubIdx].name = val; save(); renderMats(document.getElementById('view-left'), document.getElementById('view-right')); }
+    function saveFolio() { const h = document.getElementById('folio-editor').innerHTML; if(curSubIdx === -1) db.mats[curMatIdx].content = h; else db.mats[curMatIdx].subs[curSubIdx].content = h; save(); }
+    function exec(c, v=null) { document.execCommand(c, false, v); document.getElementById('folio-editor').focus(); }
+    function exportPDF() { html2pdf().from(document.getElementById('folio-editor')).set({margin:15, filename:'Mis_Apuntes.pdf'}).save(); }
+
+    /* ================= 2. POMODORO DE ALTA PRECISIÓN ================= */
+    function renderPomo(l, r) {
+        l.innerHTML = `<h2>Técnica Pomodoro</h2>
+            <div class="card">
+                <p style="font-weight:600; margin-bottom:10px; font-size:15px;">1. Asignatura a estudiar:</p>
+                <select id="sel-pomo-mat" style="width:100%; margin-bottom:25px; padding:12px;">
+                    <option value="">-- Elige la materia --</option>
+                    ${db.mats.map(m => `<option value="${m.name}">${m.name}</option>`).join('')}
+                </select>
+                
+                <p style="font-weight:600; margin-bottom:10px; font-size:15px;">2. Tiempo Estudio: <span id="val-study" style="color:var(--gold); font-size:18px;">${db.settings.pomoStudy}</span> min</p>
+                <input type="range" min="1" max="120" value="${db.settings.pomoStudy}" class="vol-slider" oninput="db.settings.pomoStudy=this.value; renderPomoUI();">
+                
+                <p style="font-weight:600; margin-bottom:10px; font-size:15px;">3. Tiempo Descanso: <span id="val-break" style="color:var(--success); font-size:18px;">${db.settings.pomoBreak}</span> min</p>
+                <input type="range" min="1" max="60" value="${db.settings.pomoBreak}" class="vol-slider" oninput="db.settings.pomoBreak=this.value; renderPomoUI();">
+                
+                <div style="display:flex; gap:12px; margin-top:20px;">
+                    <button class="btn-main" style="flex:1; background:var(--success); font-size:15px;" onclick="startTimer()">▶ INICIAR</button>
+                    <button class="btn-main" style="flex:1; background:#e67e22; font-size:15px;" onclick="pauseTimer()">⏸ PAUSA</button>
+                    <button class="btn-main" style="flex:1; background:var(--danger); font-size:15px;" onclick="resetTimer()">⏹ RESET</button>
+                </div>
+            </div>`;
+        
+        r.innerHTML = `<h2 style="text-align:center; border:none; margin-top:20px;">Reloj de Enfoque</h2>
+            <div style="text-align:center; margin-top:40px; background:#fff; padding:50px; border-radius:20px; box-shadow:0 15px 40px rgba(0,0,0,0.08); border:1px solid #e8e2d5;">
+                <h3 id="main-timer-status" style="color:var(--text-main); font-size:26px; letter-spacing:3px; text-transform:uppercase; font-weight:700;">EN ESPERA</h3>
+                <h1 style="font-size:140px; font-family:'Special Elite', monospace; color:#1a1a1a; margin:30px 0; line-height:1;" id="main-timer-clock">--:--</h1>
+                <p style="color:#777; font-size:18px; font-style:italic;" id="main-timer-msg">Precisión sincronizada con reloj atómico ⚡</p>
+            </div>`;
+        
+        renderPomoUI();
+        // Si el temporizador ya estaba corriendo o pausado, actualizar visualmente al entrar a la pestaña
+        if (timerSecs > 0) {
+            document.getElementById('main-timer-status').innerText = timerObj ? (isStudySession ? "ESTUDIO EN PROGRESO" : "TIEMPO DE DESCANSO") : "PAUSADO";
+            document.getElementById('main-timer-status').style.color = isStudySession ? "var(--danger)" : "var(--success)";
+            updateTimerDisplay(timerSecs);
+        }
+    }
+
+    function renderPomoUI() {
+        document.getElementById('val-study').innerText = db.settings.pomoStudy;
+        document.getElementById('val-break').innerText = db.settings.pomoBreak;
+    }
+
+    function startTimer() {
+        const mat = document.getElementById('sel-pomo-mat') ? document.getElementById('sel-pomo-mat').value : null;
+        if(isStudySession && document.getElementById('sel-pomo-mat') && !mat) { 
+            alert("¡Espera! Debes seleccionar la asignatura antes de iniciar."); 
+            return; 
+        }
+        if(timerObj) return; // Evita múltiples clicks
+
+        // Si es la primera vez que se inicia (o viene de un reset), cargar los segundos de los settings
+        if(timerSecs <= 0) {
+            timerSecs = (isStudySession ? db.settings.pomoStudy : db.settings.pomoBreak) * 60;
+        }
+        
+        // ESTA ES LA CLAVE PARA QUE NO SE ATRASE: Calculamos en qué milisegundo exacto terminará
+        expectedEndTime = Date.now() + (timerSecs * 1000);
+
+        if (document.getElementById('main-timer-status')) {
+            document.getElementById('main-timer-status').innerText = isStudySession ? "ESTUDIO EN PROGRESO" : "TIEMPO DE DESCANSO";
+            document.getElementById('main-timer-status').style.color = isStudySession ? "var(--danger)" : "var(--success)";
+            document.getElementById('main-timer-msg').innerText = isStudySession ? `Materia actual: ${mat}` : "Aprovecha para hidratarte o estirar.";
+        }
+        document.getElementById('pomo-posit-status').innerText = isStudySession ? "Estudiando 📖" : "Descanso ☕";
+
+        // Usamos un intervalo más rápido (200ms) para que la pantalla se actualice de forma muy suave y precisa.
+        timerObj = setInterval(() => {
+            const now = Date.now();
+            let remaining = Math.round((expectedEndTime - now) / 1000);
+
+            if(remaining <= 0) {
+                // TIEMPO AGOTADO
+                remaining = 0;
+                clearInterval(timerObj); timerObj = null;
+                timerSecs = 0;
+                updateTimerDisplay(0);
+                
+                new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg').play();
+                
+                if(isStudySession) {
+                    if(mat) trackStudy(mat, db.settings.pomoStudy);
+                    alert("¡Bloque de estudio superado! Te has ganado un descanso.");
+                    isStudySession = false;
+                } else {
+                    alert("¡Descanso terminado! Volvamos a enfocarnos.");
+                    isStudySession = true;
+                }
+                startTimer(); // Auto-iniciar la siguiente fase
+            } else {
+                // SEGUIMOS CONTANDO
+                timerSecs = remaining; // Actualizar la variable por si se pausa
+                updateTimerDisplay(remaining);
+            }
+        }, 200);
+    }
+
+    function updateTimerDisplay(seconds) {
+        const m = Math.floor(seconds/60);
+        const s = seconds % 60;
+        const str = `${m}:${s<10?'0':''}${s}`;
+        
+        if(document.getElementById('main-timer-clock')) {
+            document.getElementById('main-timer-clock').innerText = str;
+        }
+        document.getElementById('pomo-posit-time').innerText = str;
+    }
+
+    function pauseTimer() { 
+        if(timerObj) {
+            clearInterval(timerObj); 
+            timerObj = null; 
+            // timerSecs ya tiene guardado el tiempo restante correcto gracias al setInterval rápido
+            if(document.getElementById('main-timer-status')) {
+                document.getElementById('main-timer-status').innerText = "PAUSADO"; 
+            }
+            document.getElementById('pomo-posit-status').innerText = "Pausado ⏸";
+        }
+    }
+
+    function resetTimer() { 
+        pauseTimer(); 
+        timerSecs = 0; 
+        isStudySession = true; 
+        document.getElementById('pomo-posit-status').innerText="En espera"; 
+        document.getElementById('pomo-posit-time').innerText="--:--"; 
+        if (curTab === 'pomo') render(); 
+    }
+
+    function trackStudy(mat, mins) {
+        if(!db.stats[mat]) db.stats[mat] = {history: []};
+        db.stats[mat].history.push({date: new Date().toISOString(), mins: parseInt(mins)});
+        save();
+    }
+
+    /* ================= 3. PROGRESIÓN ================= */
+    function renderStats(l, r) {
+        l.innerHTML = `<h2>Tu Progresión</h2><p style="margin-bottom:25px; color:#555; font-size:15px;">Monitor de estudio calculado automáticamente mediante tus sesiones de Pomodoro.</p>`;
+        
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const startOfWeek = startOfDay - (now.getDay() === 0 ? 6 : now.getDay() - 1) * 86400000; 
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+        let lHtml = `<div style="display:grid; gap:16px;">`;
+        let rHtml = `<h2>Análisis Detallado</h2><div style="display:grid; gap:16px;">`;
+
+        db.mats.forEach(m => {
+            const history = db.stats[m.name]?.history || [];
+            let d=0, w=0, mo=0, total=0;
+            
+            history.forEach(session => {
+                const time = new Date(session.date).getTime();
+                const mins = session.mins;
+                total += mins;
+                if(time >= startOfDay) d += mins;
+                if(time >= startOfWeek) w += mins;
+                if(time >= startOfMonth) mo += mins;
+            });
+
+            const avgDaily = history.length > 0 ? (total / (Math.max(1, (now.getTime() - new Date(history[0].date).getTime())/86400000))) : 0;
+            const eval = avgDaily >= 30 ? '<span style="color:var(--success); font-weight:bold;">🟢 Mantienes un buen ritmo</span>' : '<span style="color:#d35400; font-weight:bold;">🟡 Puedes dar un poco más</span>';
+
+            lHtml += `
+                <div class="card" style="border-left:6px solid ${m.col}">
+                    <h3 style="margin-bottom:8px; font-size:18px;">${m.name}</h3>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:14px;">
+                        <div style="background:#f9f9f9; padding:8px; border-radius:6px;">Hoy:<br><strong style="font-size:16px; color:#222;">${formatTime(d)}</strong></div>
+                        <div style="background:#f9f9f9; padding:8px; border-radius:6px;">Semana:<br><strong style="font-size:16px; color:#222;">${formatTime(w)}</strong></div>
+                    </div>
+                    <div style="margin-top:10px; font-size:14px; background:#f9f9f9; padding:8px; border-radius:6px;">Este Mes: <strong style="font-size:16px; color:#222;">${formatTime(mo)}</strong></div>
+                </div>`;
+            
+            rHtml += `
+                <div class="card">
+                    <h3 style="font-size:20px;">${m.name}</h3>
+                    <div style="display:flex; justify-content:space-around; margin:15px 0;">
+                        <div style="text-align:center;">
+                            <div style="font-size:26px; font-weight:bold; color:var(--text-main);">${formatTime(total)}</div>
+                            <small style="color:#777; font-weight:500;">Tiempo Total</small>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-size:26px; font-weight:bold; color:var(--text-main);">${formatTime(avgDaily)}</div>
+                            <small style="color:#777; font-weight:500;">Media Diaria</small>
+                        </div>
+                    </div>
+                    <div style="margin-top:15px; padding-top:12px; border-top:1px solid #eaeaea; text-align:center; font-size:15px;">${eval}</div>
+                </div>`;
+        });
+
+        l.innerHTML += lHtml + `</div>`;
+        r.innerHTML = rHtml + `</div>`;
+    }
+
+    /* ================= 4. CALENDARIO GIGANTE ================= */
+    function renderCal(l, r) {
+        l.innerHTML = `<h2>Organización Semanal</h2>
+            <div class="card">
+                <p style="font-weight:600; margin-bottom:8px; font-size:15px;">1. Tarea a programar:</p>
+                <input type="text" id="cal-in" placeholder="Ej: Hacer esquema de Bio..." style="width:100%; margin-bottom:20px;">
+                
+                <p style="font-weight:600; margin-bottom:8px; font-size:15px;">2. Color de etiqueta:</p>
+                <input type="color" id="cal-col" value="#3498db" style="width:100%; height:50px; border:1px solid #ccc; border-radius:6px; margin-bottom:20px; cursor:pointer; padding:2px;">
+                
+                <div style="background:#fdfdfc; padding:15px; border-radius:8px; border-left:4px solid var(--gold); border-right:1px solid #eee; border-top:1px solid #eee; border-bottom:1px solid #eee;">
+                    <p style="font-size:14px; color:#555; line-height:1.5;">
+                        <strong style="color:#111;">Guía de uso:</strong> Escribe tu tarea, elige el color, y luego <b>haz clic en la hora y día exacto</b> de la página derecha para insertarla.<br><br>
+                        Haz clic sobre cualquier tarea creada en el calendario para completarla o borrarla.
+                    </p>
+                </div>
+            </div>`;
+        
+        let g = `<div class="cal-wrapper"><div class="cal-grid">
+            <div class="cal-header" style="background:#2a1610;">Hora</div>
+            <div class="cal-header">Lun</div><div class="cal-header">Mar</div><div class="cal-header">Mié</div>
+            <div class="cal-header">Jue</div><div class="cal-header">Vie</div><div class="cal-header">Sáb</div><div class="cal-header">Dom</div>`;
+        
+        for(let h=8; h<=23; h++) {
+            g += `<div class="cal-hour-label">${h}:00</div>`;
+            for(let d=1; d<=7; d++) {
+                const tasks = db.cal.filter(t => t.d == d && t.h == h);
+                g += `<div class="cal-cell" onclick="setCalTask(${d},${h})">
+                    ${tasks.map((t, ti) => `
+                        <span class="cal-task-item" style="background:${t.c}; ${t.done ? 'opacity:0.4; text-decoration:line-through; background:#7f8c8d;' : ''}" 
+                              onclick="event.stopPropagation(); manageCalTask(${db.cal.indexOf(t)})" title="${t.txt}">
+                            ${t.txt}
+                        </span>
+                    `).join('')}
+                </div>`;
+            }
+        }
+        r.innerHTML = `<h2 style="margin-bottom:20px;">Tu Planning</h2>` + g + `</div></div>`;
+    }
+    function setCalTask(d, h) {
+        const txt = document.getElementById('cal-in').value;
+        const c = document.getElementById('cal-col').value;
+        if(txt) { db.cal.push({txt, c, d, h, done:false}); render(); }
+    }
+    function manageCalTask(idx) {
+        showModal("Gestión de tarea del calendario", () => { db.cal.splice(idx, 1); render(); });
+        
+        const btnContainer = document.getElementById('btn-confirm').parentElement;
+        const btnComplete = document.createElement('button');
+        btnComplete.className = 'btn-main';
+        btnComplete.style.background = 'var(--gold)';
+        btnComplete.innerText = db.cal[idx].done ? 'Desmarcar' : 'Completar Tarea';
+        btnComplete.id = 'temp-btn-comp';
+        btnComplete.onclick = () => { db.cal[idx].done = !db.cal[idx].done; closeModal(); render(); };
+        
+        document.getElementById('btn-confirm').innerText = 'Eliminar';
+        document.getElementById('btn-confirm').style.background = 'var(--danger)';
+        btnContainer.insertBefore(btnComplete, btnContainer.firstChild);
+
+        const origClose = closeModal;
+        closeModal = function() {
+            const t = document.getElementById('temp-btn-comp');
+            if(t) t.remove();
+            document.getElementById('btn-confirm').innerText = 'Sí, confirmar';
+            document.getElementById('btn-confirm').style.background = 'var(--success)';
+            origClose();
+        };
+    }
+
+    /* ================= 5. TAREAS ================= */
+    function renderTasks(l, r) {
+        const renderList = (type, title, hint) => {
+            let html = `<h2>${title}</h2>
+                <div class="card" style="display:flex; gap:12px; padding:15px; background:#fbfbfb;">
+                    <input type="text" id="in-t-${type}" placeholder="${hint}" style="flex:1;">
+                    <input type="color" id="in-tc-${type}" value="${type==='daily'?'#c5a059':'#3498db'}" style="width:50px; height:46px; border:1px solid #ccc; border-radius:6px; padding:2px;">
+                    <button class="btn-main" onclick="addTask('${type}')">Añadir</button>
+                </div><div style="margin-top:25px;">`;
+            
+            db.tasks[type].forEach((t, i) => {
+                html += `
+                    <div class="card" style="border-left:6px solid ${t.c}; display:flex; align-items:center; padding:14px; gap:12px;">
+                        <button class="urgency-btn ${t.urg?'':'inactive'}" onclick="toggleUrg('${type}',${i})" title="Prioridad">${t.urg?'🚩 Urgente':'! Normal'}</button>
+                        <span style="flex:1; font-weight:500; font-size:16px; ${t.done?'text-decoration:line-through; color:#aaa;':''}">${t.txt}</span>
+                        <div style="display:flex; gap:8px;">
+                            <button style="border:none; background:${t.done?'#95a5a6':'var(--success)'}; color:white; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:bold;" onclick="doneTask('${type}',${i})">✓</button>
+                            <button style="border:none; background:var(--danger); color:white; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:bold;" onclick="delTask('${type}',${i})">✗</button>
+                        </div>
+                    </div>`;
+            });
+            return html + `</div>`;
+        };
+
+        l.innerHTML = renderList('daily', 'Tareas Diarias', 'Ej: Leer 10 páginas...');
+        r.innerHTML = renderList('weekly', 'Objetivos Semanales', 'Ej: Terminar proyecto de Ciencias...');
+    }
+    function addTask(t) { const txt = document.getElementById(`in-t-${t}`).value; const c = document.getElementById(`in-tc-${t}`).value; if(txt) { db.tasks[t].push({txt, c, done:false, urg:false}); render(); } }
+    function toggleUrg(t, i) { db.tasks[t][i].urg = !db.tasks[t][i].urg; save(); render(); }
+    function doneTask(t, i) { db.tasks[t][i].done = !db.tasks[t][i].done; render(); }
+    function delTask(t, i) { db.tasks[t].splice(i, 1); render(); }
+
+    /* ================= 6. LOGROS ================= */
+    function renderTrophy(l, r) {
+        l.innerHTML = `<h2>Metas y Desafíos</h2>
+            <div class="card" style="background:#fcfcfc;">
+                <input type="text" id="in-lg" style="width:100%; margin-bottom:18px; font-size:16px; padding:14px;" placeholder="Ej: Aprobar el trimestre sin suspensos...">
+                <button class="btn-main" style="width:100%; font-size:16px;" onclick="addLogro()">Fijar Objetivo</button>
+            </div>
+            <h3 style="margin-top:35px; margin-bottom:20px; border-bottom:2px solid #eee; padding-bottom:10px;">En Progreso</h3>
+            <div>
+                ${db.logros.map((lg, i) => !lg.done ? `
+                <div class="card" style="display:flex; align-items:center; padding:15px;">
+                    <strong style="flex:1; font-size:16px;">${lg.txt}</strong>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn-main" style="padding:8px 14px; font-size:13px; background:var(--success);" onclick="confirmLogro(${i})">¡Conseguido!</button>
+                        <button class="btn-main" style="padding:8px 14px; font-size:13px; background:var(--danger);" onclick="showModal('¿Descartar este objetivo?', () => { db.logros.splice(${i},1); render(); })">Borrar</button>
+                    </div>
+                </div>` : '').join('')}
+            </div>`;
+        
+        r.innerHTML = `<h2>Vitrina de Trofeos</h2>
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:25px; padding:15px 5px;">
+            ${db.logros.map(lg => lg.done ? `
+                <div class="card" style="text-align:center; padding:30px 20px; border:2px solid var(--gold); background:linear-gradient(135deg, #fff, #fdfbf7); box-shadow: 0 12px 25px rgba(197, 160, 89, 0.2);">
+                    <div style="font-size:55px; filter:drop-shadow(0 6px 6px rgba(0,0,0,0.25)); margin-bottom:15px;">🏆</div>
+                    <strong style="color:#3e261a; font-family:'Lora', serif; font-size:16px; line-height:1.4;">${lg.txt}</strong>
+                </div>` : '').join('')}
+            </div>`;
+    }
+    function addLogro() { const txt = document.getElementById('in-lg').value; if(txt) { db.logros.push({txt, done:false}); render(); } }
+    function confirmLogro(i) { showModal(`¿Has logrado "${db.logros[i].txt}"? ¡Increíble!`, () => { db.logros[i].done = true; render(); }); }
+
+    /* ================= 7. EXÁMENES ================= */
+    function renderExams(l, r) {
+        l.innerHTML = `<h2>Programar Examen</h2>
+            <div class="card">
+                <p style="font-weight:600; margin-bottom:6px;">Título del Examen:</p>
+                <input type="text" id="ex-title" placeholder="Ej: Final de Mates..." style="width:100%; margin-bottom:18px;">
+                
+                <p style="font-weight:600; margin-bottom:6px;">Materia Vinculada:</p>
+                <select id="ex-mat" style="width:100%; margin-bottom:18px;">
+                    ${db.mats.map(m => `<option value="${m.name}">${m.name}</option>`).join('')}
+                </select>
+                
+                <p style="font-weight:600; margin-bottom:6px;">Fecha:</p>
+                <input type="date" id="ex-date" style="width:100%; margin-bottom:22px;">
+                
+                <p style="font-weight:600; margin-bottom:6px;">Objetivo de Estudio: <span id="ex-h-val" style="color:var(--gold); font-size:20px; font-weight:bold;">10</span> <span style="color:#666;">horas</span></p>
+                <input type="range" min="1" max="100" value="10" class="vol-slider" id="ex-h-range" oninput="document.getElementById('ex-h-val').innerText=this.value">
+                
+                <p style="font-weight:600; margin-bottom:6px;">Color Distintivo:</p>
+                <input type="color" id="ex-col" value="#8e44ad" style="width:100%; height:50px; border:1px solid #ccc; border-radius:6px; margin-bottom:25px; cursor:pointer; padding:2px;">
+                
+                <button class="btn-main" style="width:100%; font-size:16px; padding:15px;" onclick="addExam()">Registrar Examen</button>
+            </div>`;
+        
+        r.innerHTML = `<h2>Estimador de Preparación</h2>
+            <p style="color:#555; margin-bottom:25px; line-height:1.5;">Compara el estudio real acumulado en Pomodoro con tu estimación. La barra se llenará de verde conforme te acerques al objetivo.</p>
+            <div style="display:grid; gap:22px;">`;
+        
+        const today = new Date().toISOString().split('T')[0];
+        db.exams = db.exams.filter(e => e.date >= today);
+
+        db.exams.forEach((ex, i) => {
+            let totalMins = 0;
+            if(db.stats[ex.mat] && db.stats[ex.mat].history) {
+                db.stats[ex.mat].history.forEach(h => totalMins += h.mins);
+            }
+            
+            const targetMins = ex.est * 60;
+            const remainingMins = Math.max(0, targetMins - totalMins);
+            const perc = Math.min((totalMins / targetMins) * 100, 100);
+            
+            r.innerHTML += `
+                <div class="card" style="border-top:5px solid ${ex.col}">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;">
+                        <div>
+                            <h3 style="margin:0 0 5px 0; font-size:20px;">${ex.title}</h3>
+                            <span style="background:#f0f0f0; padding:4px 10px; border-radius:15px; font-size:12px; font-weight:700; color:#555;">Materia: ${ex.mat}</span>
+                        </div>
+                        <div style="text-align:right;">
+                            <span style="font-weight:bold; font-size:17px; color:var(--text-main); background:#fff5d7; padding:4px 8px; border-radius:4px;">📅 ${ex.date.split('-').reverse().join('/')}</span>
+                            <br><button style="background:none; border:none; color:var(--danger); font-size:13px; font-weight:bold; cursor:pointer; margin-top:8px; text-decoration:underline;" onclick="db.exams.splice(${i},1); render();">Cancelar Examen</button>
+                        </div>
+                    </div>
+                    
+                    <div class="exam-bar-bg">
+                        <div class="bar-green" style="width:${perc}%"></div>
+                        <div class="bar-red"></div>
+                    </div>
+                    
+                    <div style="display:flex; justify-content:space-between; font-size:15px; font-weight:700; background:#f9f9f9; padding:10px; border-radius:6px; margin-top:5px;">
+                        <span style="color:var(--success)">✅ Estudiado: ${formatTime(totalMins)}</span>
+                        <span style="color:var(--danger)">⏳ Te faltan: ${formatTime(remainingMins)}</span>
+                    </div>
+                </div>`;
+        });
+        r.innerHTML += `</div>`;
+    }
+    function addExam() {
+        const title = document.getElementById('ex-title').value;
+        const mat = document.getElementById('ex-mat').value;
+        const date = document.getElementById('ex-date').value;
+        const est = document.getElementById('ex-h-range').value;
+        const col = document.getElementById('ex-col').value;
+        if(title && mat && date) { db.exams.push({title, mat, date, est, col}); render(); }
+    }
+
+    /* --- GLOBAL HELPERS --- */
+    function showModal(msg, cb) {
+        document.getElementById('modal-text').innerText = msg;
+        document.getElementById('modal').style.display = 'flex';
+        document.getElementById('btn-confirm').onclick = () => { cb(); closeModal(); };
+    }
+    function closeModal() { document.getElementById('modal').style.display = 'none'; }
+
+    function updatePosits() {
+        document.getElementById('live-clock').innerText = new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        
+        const urgs = [...db.tasks.daily, ...db.tasks.weekly].filter(t => t.urg && !t.done);
+        let urgHtml = "";
+        if(urgs.length > 0) {
+            urgs.forEach(u => urgHtml += `• ${u.txt}<br>`);
+        } else {
+            urgHtml = "Nada urgente.<br>¡Buen trabajo!";
+        }
+        document.getElementById('urgent-list-posit').innerHTML = urgHtml;
+    }
+
+    setInterval(updatePosits, 1000);
+    window.onload = () => { initZoom(); render(); };
+</script>
+</body>
+</html>
